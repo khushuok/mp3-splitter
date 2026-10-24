@@ -35,7 +35,7 @@ async function loadFile(file) {
     const data = await file.arrayBuffer(); const audioCtx = new AudioContext();
     buffer = await audioCtx.decodeAudioData(data); await audioCtx.close();
     if (objectUrl) URL.revokeObjectURL(objectUrl); objectUrl = URL.createObjectURL(file); audio.src = objectUrl;
-    start = 0; end = buffer.duration; $('#fileName').textContent = file.name; $('#fileMeta').textContent = `${(file.size / 1048576).toFixed(1)} MB · ${format(end)}`;
+    start = 0; end = buffer.duration; $('#fileName').textContent = file.name; $('#outputName').value = file.name.replace(/\.[^/.]+$/, '') + '-cut'; $('#fileMeta').textContent = `${(file.size / 1048576).toFixed(1)} MB · ${format(end)}`;
     emptyState.classList.add('hidden'); editor.classList.remove('hidden'); requestAnimationFrame(() => { drawWave(); updateUI(); });
     setStatus('Drag the white handles to choose the part you want to keep.');
   } catch { setStatus('That file could not be read. Try another MP3.'); }
@@ -52,10 +52,17 @@ $('#rewindBtn').addEventListener('click',()=> { audio.pause(); audio.currentTime
 $('#playBtn').addEventListener('click',()=> { if(audio.paused){ audio.currentTime=Math.max(start, Math.min(audio.currentTime,end)); audio.play(); $('#playBtn').textContent='❚❚'; $('#playhead').style.display='block'; } else audio.pause(); });
 audio.addEventListener('pause',()=> $('#playBtn').textContent='▶');
 audio.addEventListener('timeupdate',()=> { const p=(audio.currentTime/buffer.duration)*100; $('#playhead').style.left=`${p}%`; if(audio.currentTime>=end){ audio.pause(); audio.currentTime=start; $('#playhead').style.display='none'; } });
+['fadeIn', 'fadeOut', 'volume'].forEach(id => {
+  $(`#${id}`).addEventListener('input', e => {
+    const value = Number(e.target.value);
+    $(`#${id}Value`).textContent = id === 'volume' ? `${value}%` : `${value.toFixed(1)}s`;
+    if (id === 'volume') audio.volume = Math.min(value / 100, 1);
+  });
+});
 function floatTo16BitPCM(input) { const out=new Int16Array(input.length); for(let i=0;i<input.length;i++){const s=Math.max(-1,Math.min(1,input[i]));out[i]=s<0?s*32768:s*32767;} return out; }
 $('#exportBtn').addEventListener('click', () => {
   if (!window.lamejs) { setStatus('MP3 encoder is still loading — please try again in a moment.'); return; }
   setStatus('Encoding your MP3…'); $('#exportBtn').disabled=true;
-  setTimeout(() => { try { const rate=buffer.sampleRate, from=Math.floor(start*rate), to=Math.floor(end*rate); const l=floatTo16BitPCM(buffer.getChannelData(0).slice(from,to)); const r=buffer.numberOfChannels>1?floatTo16BitPCM(buffer.getChannelData(1).slice(from,to)):l; const encoder=new lamejs.Mp3Encoder(2,rate,192); const chunks=[]; for(let i=0;i<l.length;i+=1152){ const mp3=encoder.encodeBuffer(l.subarray(i,i+1152),r.subarray(i,i+1152)); if(mp3.length)chunks.push(new Int8Array(mp3)); } const last=encoder.flush(); if(last.length)chunks.push(new Int8Array(last)); const blob=new Blob(chunks,{type:'audio/mpeg'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`${($('#fileName').textContent.replace(/\.[^/.]+$/,''))}-cut.mp3`; a.click(); URL.revokeObjectURL(a.href); setStatus('Your cut is ready — download started.'); } catch(err) { console.error(err); setStatus('Could not export this clip. Please try a shorter selection.'); } finally { $('#exportBtn').disabled=false; } }, 30);
+  setTimeout(() => { try { const rate=buffer.sampleRate, from=Math.floor(start*rate), to=Math.floor(end*rate), length=to-from; const sourceL=buffer.getChannelData(0), sourceR=buffer.numberOfChannels>1?buffer.getChannelData(1):sourceL; const fadeIn=Math.min(Number($('#fadeIn').value), length/rate), fadeOut=Math.min(Number($('#fadeOut').value), length/rate), volume=Number($('#volume').value)/100; const l=new Float32Array(length), r=new Float32Array(length); for(let i=0;i<length;i++){ let gain=volume; const t=i/rate, remaining=(length-i)/rate; if(fadeIn>0 && t<fadeIn) gain*=t/fadeIn; if(fadeOut>0 && remaining<fadeOut) gain*=remaining/fadeOut; l[i]=sourceL[from+i]*gain; r[i]=sourceR[from+i]*gain; } const encoder=new lamejs.Mp3Encoder(2,rate,Number($('#quality').value)); const left=floatTo16BitPCM(l), right=floatTo16BitPCM(r), chunks=[]; for(let i=0;i<left.length;i+=1152){ const mp3=encoder.encodeBuffer(left.subarray(i,i+1152),right.subarray(i,i+1152)); if(mp3.length)chunks.push(new Int8Array(mp3)); } const last=encoder.flush(); if(last.length)chunks.push(new Int8Array(last)); const blob=new Blob(chunks,{type:'audio/mpeg'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); const safeName=$('#outputName').value.trim().replace(/[\\/:*?"<>|]/g,'-') || 'audio-cut'; a.download=`${safeName}.mp3`; a.click(); URL.revokeObjectURL(a.href); setStatus('Your cut is ready — download started.'); } catch(err) { console.error(err); setStatus('Could not export this clip. Please try a shorter selection.'); } finally { $('#exportBtn').disabled=false; } }, 30);
 });
 window.addEventListener('resize',()=>buffer&&drawWave());
