@@ -11,6 +11,7 @@ let buffer, objectUrl, start = 0, end = 0, dragging = null;
 const $ = selector => document.querySelector(selector);
 const format = seconds => { const minutes = Math.floor(seconds / 60); return `${minutes}:${(seconds % 60).toFixed(1).padStart(4, '0')}`; };
 const setStatus = text => $('#status').textContent = text;
+const setUploadMessage = (text, error = false) => { $('#uploadMessage').textContent = text; dropZone.classList.toggle('error', error); };
 
 function updateUI() {
   const duration = buffer.duration;
@@ -38,12 +39,15 @@ function drawWave() {
   }
 }
 async function loadFile(file) {
-  if (!file || (!file.type.startsWith('audio/') && !/\.mp3$/i.test(file.name))) { setStatus('Please choose an audio file.'); return; }
-  if (file.size > 100 * 1024 * 1024) { setStatus('Please choose a file smaller than 100 MB.'); return; }
-  setStatus('Reading your audio…');
+  if (!file || (!file.type.startsWith('audio/') && !/\.(mp3|wav|m4a|ogg)$/i.test(file.name))) { setUploadMessage('Please choose an MP3, WAV, M4A, or OGG file.', true); return; }
+  if (file.size > 100 * 1024 * 1024) { setUploadMessage('Please choose a file smaller than 100 MB.', true); return; }
+  dropZone.classList.add('loading'); setUploadMessage(`Loading ${file.name}…`); setStatus('Reading your audio…');
   try {
-    const data = await file.arrayBuffer(), audioContext = new AudioContext();
-    buffer = await audioContext.decodeAudioData(data); await audioContext.close();
+    const data = await file.arrayBuffer();
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) throw new Error('Web Audio is unavailable in this browser.');
+    const audioContext = new AudioContextClass();
+    buffer = await audioContext.decodeAudioData(data.slice(0)); await audioContext.close();
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl = URL.createObjectURL(file); audio.src = objectUrl;
     start = 0; end = buffer.duration; audio.currentTime = 0;
@@ -52,9 +56,10 @@ async function loadFile(file) {
     emptyState.classList.add('hidden'); editor.classList.remove('hidden');
     requestAnimationFrame(() => { drawWave(); updateUI(); });
     setStatus('Click anywhere on the waveform to preview from that point. Drag handles to choose what you export.');
-  } catch { setStatus('That file could not be read. Try another MP3.'); }
+  } catch (error) { console.error(error); setUploadMessage('Could not read that audio. Try an MP3 or WAV file.', true); }
+  finally { dropZone.classList.remove('loading'); }
 }
-input.addEventListener('change', event => loadFile(event.target.files[0]));
+input.addEventListener('change', event => { loadFile(event.target.files[0]); event.target.value = ''; });
 $('#replaceBtn').addEventListener('click', () => input.click());
 ['dragenter', 'dragover'].forEach(eventName => dropZone.addEventListener(eventName, event => { event.preventDefault(); dropZone.classList.add('dragging'); }));
 ['dragleave', 'drop'].forEach(eventName => dropZone.addEventListener(eventName, event => { event.preventDefault(); dropZone.classList.remove('dragging'); }));
