@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Splitly — MP3 editor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header>
+        <a class="brand" href="#"><span class="brand-mark">S</span>splitly</a>
+        <p class="eyebrow">Simple MP3 cutter</p>
+      </header>
+
+      <section class="hero" id="emptyState">
+        <div class="hero-copy">
+          <span class="pill">IN YOUR BROWSER</span>
+          <h1>Trim the noise.<br /><em>Keep the good part.</em></h1>
+          <p>Drop in an MP3, set your cut points and export a clean new file. Nothing is uploaded.</p>
+        </div>
+        <label class="drop-zone" id="dropZone" for="fileInput">
+          <input id="fileInput" type="file" accept="audio/mpeg,audio/mp3,audio/*" hidden />
+          <span class="upload-icon">↥</span>
+          <strong>Drop your MP3 here</strong>
+          <span>or click to browse</span>
+          <small>MP3 · max 100 MB</small>
+        </label>
+      </section>
+
+      <section class="editor hidden" id="editor" aria-live="polite">
+        <div class="file-row">
+          <div class="file-icon">♫</div>
+          <div><strong id="fileName">audio.mp3</strong><span id="fileMeta">Loading…</span></div>
+          <button class="text-button" id="replaceBtn">Replace</button>
+        </div>
+
+        <div class="timeline-wrap">
+          <div class="time-labels"><span id="startTime">0:00.0</span><span id="durationTime">0:00.0</span></div>
+          <div class="wave-track" id="waveTrack">
+            <canvas id="waveform"></canvas>
+            <div class="selection" id="selection"></div>
+            <button class="handle handle-left" id="startHandle" aria-label="Start trim handle"></button>
+            <button class="handle handle-right" id="endHandle" aria-label="End trim handle"></button>
+            <div class="playhead" id="playhead"></div>
+          </div>
+          <div class="time-labels bottom"><span>START <b id="startReadout">0:00.0</b></span><span>END <b id="endReadout">0:00.0</b></span></div>
+        </div>
+
+        <div class="transport">
+          <button class="play-button" id="playBtn" aria-label="Play selection">▶</button>
+          <div><strong id="clipLength">0:00.0</strong><span>selected clip</span></div>
+          <div class="transport-spacer"></div>
+          <button class="icon-button" id="rewindBtn" aria-label="Rewind">↺</button>
+          <button class="secondary-button" id="exportBtn">Export MP3 <span>→</span></button>
+        </div>
+        <p class="status" id="status">Drag the white handles to choose the part you want to keep.</p>
+      </section>
+    </main>
+    <footer>YOUR AUDIO STAYS ON YOUR DEVICE <span>·</span> MADE FOR QUICK CUTS</footer>
+    <audio id="audio"></audio>
+    <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.all.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
