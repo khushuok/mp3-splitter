@@ -3,73 +3,113 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Splitly — MP3 editor</title>
+    <meta name="theme-color" content="#090b10" />
+    <title>Splitly — Audio studio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <main class="app-shell">
-      <header>
-        <a class="brand" href="#"><span class="brand-mark">S</span>splitly</a>
-        <p class="eyebrow">Simple MP3 cutter</p>
-      </header>
+    <div class="noise"></div>
+    <header class="site-header">
+      <a class="brand" href="#" id="homeLink"><span class="brand-orb"><i></i><i></i><i></i></span>splitly</a>
+      <nav><a href="#tools">Tools</a><a href="#how-it-works">How it works</a></nav>
+      <span class="local-badge"><b></b>Runs locally</span>
+    </header>
 
-      <section class="hero" id="emptyState">
+    <main id="homeScreen">
+      <section class="hero" id="tools">
         <div class="hero-copy">
-          <span class="pill">IN YOUR BROWSER</span>
-          <h1>Trim the noise.<br /><em>Keep the good part.</em></h1>
-          <p>Drop in an MP3, set your cut points and export a clean new file. Nothing is uploaded.</p>
+          <p class="overline">THE SIMPLE AUDIO WORKSPACE</p>
+          <h1>Make the cut.<br /><em>Keep your flow.</em></h1>
+          <p class="hero-text">A clean browser-based workspace for quick cuts, layered audio and polished exports. Your files never leave your device.</p>
         </div>
-        <label class="drop-zone" id="dropZone" for="fileInput">
-          <input id="fileInput" type="file" accept="audio/mpeg,audio/mp3,audio/*" hidden />
-          <span class="upload-icon">↥</span>
-          <strong>Drop your MP3 here</strong>
-          <span>or click to browse</span>
-          <small>MP3 · max 100 MB</small>
-        </label>
-      </section>
-
-      <section class="editor hidden" id="editor" aria-live="polite">
-        <div class="file-row">
-          <div class="file-icon">♫</div>
-          <div><strong id="fileName">audio.mp3</strong><span id="fileMeta">Loading…</span></div>
-          <button class="text-button" id="replaceBtn">Replace</button>
-        </div>
-
-        <div class="timeline-wrap">
-          <div class="time-labels"><span id="startTime">0:00.0</span><span id="durationTime">0:00.0</span></div>
-          <div class="wave-track" id="waveTrack">
-            <canvas id="waveform"></canvas>
-            <div class="selection" id="selection"></div>
-            <button class="handle handle-left" id="startHandle" aria-label="Start trim handle"></button>
-            <button class="handle handle-right" id="endHandle" aria-label="End trim handle"></button>
-            <div class="playhead" id="playhead"></div>
+        <div class="studio-cards">
+          <button class="tool-card main-tool" data-mode="studio">
+            <span class="tool-icon wave-icon"><i></i><i></i><i></i><i></i><i></i></span>
+            <span class="tool-content"><b>Audio studio</b><small>Layer, cut & arrange audio</small></span>
+            <span class="card-arrow">↗</span>
+          </button>
+          <button class="tool-card" data-mode="split">
+            <span class="tool-icon scissors">✂</span>
+            <span class="tool-content"><b>Split audio</b><small>Quickly trim an MP3</small></span>
+            <span class="card-arrow">↗</span>
+          </button>
+          <div class="tool-card disabled-tool">
+            <span class="tool-icon video-icon">▸</span>
+            <span class="tool-content"><b>Video editor</b><small>Coming soon</small></span>
+            <span class="soon">SOON</span>
           </div>
-          <div class="time-labels bottom"><span>START <b id="startReadout">0:00.0</b></span><span>END <b id="endReadout">0:00.0</b></span></div>
         </div>
-
-        <section class="edit-controls" aria-label="Audio edit controls">
-          <label class="control-field"><span>Fade in</span><div><input type="range" id="fadeIn" min="0" max="10" step="0.1" value="0" /><output id="fadeInValue">0.0s</output></div></label>
-          <label class="control-field"><span>Fade out</span><div><input type="range" id="fadeOut" min="0" max="10" step="0.1" value="0" /><output id="fadeOutValue">0.0s</output></div></label>
-          <label class="control-field"><span>Volume</span><div><input type="range" id="volume" min="0" max="150" step="1" value="100" /><output id="volumeValue">100%</output></div></label>
-          <label class="control-field select-field"><span>MP3 quality</span><select id="quality"><option value="128">128 kbps</option><option value="192" selected>192 kbps</option><option value="320">320 kbps</option></select></label>
-        </section>
-        <label class="file-name-field"><span>Output filename</span><input id="outputName" type="text" maxlength="70" placeholder="my-audio-cut" /><b>.mp3</b></label>
-
-        <div class="transport">
-          <button class="play-button" id="playBtn" aria-label="Play selection">▶</button>
-          <div><strong id="clipLength">0:00.0</strong><span>selected clip</span></div>
-          <div class="transport-spacer"></div>
-          <button class="icon-button" id="rewindBtn" aria-label="Rewind">↺</button>
-          <button class="secondary-button" id="exportBtn">Export MP3 <span>→</span></button>
-        </div>
-        <p class="status" id="status">Drag the white handles to choose the part you want to keep.</p>
+      </section>
+      <section class="trust-row" id="how-it-works">
+        <span>01&nbsp; Import audio</span><i></i><span>02&nbsp; Arrange your layers</span><i></i><span>03&nbsp; Export as MP3</span>
       </section>
     </main>
-    <footer>YOUR AUDIO STAYS ON YOUR DEVICE <span>·</span> MADE FOR QUICK CUTS</footer>
-    <audio id="audio"></audio>
+
+    <main class="studio hidden" id="studioScreen">
+      <div class="studio-topbar">
+        <button class="back-button" id="backHome">← <span>All tools</span></button>
+        <div class="project-title"><span>PROJECT</span><input id="projectName" value="Untitled session" maxlength="50" /></div>
+        <div class="top-actions"><button class="ghost-button" id="addAudio">+ Add audio</button><button class="export-button" id="openExport">Export <span>↗</span></button></div>
+      </div>
+
+      <section class="studio-workspace">
+        <aside class="tool-rail" aria-label="Editing tools">
+          <button class="rail-button active" title="Arrange">≋<span>Arrange</span></button>
+          <button class="rail-button" id="splitClip" title="Split at playhead">✂<span>Split</span></button>
+          <button class="rail-button" id="duplicateClip" title="Duplicate selected clip">⧉<span>Duplicate</span></button>
+          <button class="rail-button danger" id="deleteClip" title="Remove selected clip">⌫<span>Remove</span></button>
+        </aside>
+
+        <section class="arrange-panel">
+          <div class="arrange-heading"><div><p class="overline">ARRANGEMENT</p><h2>Timeline</h2></div><div class="timeline-tools"><button id="moveLeft" title="Move selected clip left">←</button><button id="moveRight" title="Move selected clip right">→</button><button id="addLayer">+ Layer</button></div></div>
+          <div class="empty-timeline" id="emptyTimeline"><span class="big-wave">⌁</span><strong>Drop audio into your timeline</strong><p>Use “Add audio” to start building your session.</p></div>
+          <div class="timeline-scroll hidden" id="timelineScroll">
+            <div class="ruler" id="ruler"></div>
+            <div class="tracks" id="tracks"></div>
+            <div class="playhead" id="timelinePlayhead"><span></span></div>
+          </div>
+        </section>
+
+        <aside class="inspector" id="inspector">
+          <p class="overline">CLIP DETAILS</p>
+          <div class="no-selection" id="noSelection"><span>⌁</span><p>Select a clip<br />to edit it.</p></div>
+          <div class="clip-properties hidden" id="clipProperties">
+            <div class="clip-file"><span class="mini-file">♫</span><div><strong id="clipName">—</strong><small id="clipMeta">—</small></div></div>
+            <div class="property"><span>Position</span><b id="clipPosition">0:00.0</b></div>
+            <div class="property"><span>Clip length</span><b id="clipLength">0:00.0</b></div>
+            <label class="volume-control"><span>Clip volume <b id="clipVolumeValue">100%</b></span><input id="clipVolume" type="range" min="0" max="150" value="100" /></label>
+            <div class="trim-section"><span>Trim clip</span><div><button id="trimStartBack">−</button><b>Start</b><button id="trimStartForward">+</button></div><div><button id="trimEndBack">+</button><b>End</b><button id="trimEndForward">−</button></div></div>
+          </div>
+          <div class="master-section"><span>Master volume <b id="masterVolumeValue">100%</b></span><input id="masterVolume" type="range" min="0" max="100" value="100" /></div>
+        </aside>
+      </section>
+
+      <footer class="transport-bar">
+        <button class="loop-button" id="loopToggle" title="Loop project">↻</button>
+        <button class="previous-button" id="rewind" title="Back to start">|◀</button>
+        <button class="play-button" id="playToggle" aria-label="Play">▶</button>
+        <span class="transport-time"><b id="currentTime">0:00.0</b><i>/</i><span id="totalTime">0:00.0</span></span>
+        <p class="transport-hint">SPACE TO PLAY · CLICK THE TIMELINE TO SEEK</p>
+        <button class="add-track-button" id="transportAdd">+ Add audio</button>
+      </footer>
+    </main>
+
+    <input id="fileInput" type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg" multiple hidden />
+    <div class="modal-backdrop hidden" id="exportModal" role="dialog" aria-modal="true" aria-labelledby="exportHeading">
+      <section class="export-modal">
+        <button class="close-modal" id="closeExport" aria-label="Close">×</button>
+        <p class="overline">READY TO SHARE</p><h2 id="exportHeading">Export your mix</h2>
+        <p class="modal-subtitle">Your project is mixed locally before downloading.</p>
+        <label class="output-field"><span>Filename</span><div><input id="outputName" value="splitly-export" maxlength="70" /><b>.mp3</b></div></label>
+        <fieldset><legend>Audio quality</legend><div class="quality-options"><label><input type="radio" name="quality" value="128" /><span><b>Standard</b><small>128 kbps</small></span></label><label><input type="radio" name="quality" value="192" checked /><span><b>High quality</b><small>192 kbps</small></span></label><label><input type="radio" name="quality" value="320" /><span><b>Best quality</b><small>320 kbps</small></span></label></div></fieldset>
+        <div class="format-row"><span>Format</span><div><b>MP3</b><small>Universal audio format</small></div><i>✓</i></div>
+        <button class="download-button" id="confirmExport">Export MP3 <span>↓</span></button>
+        <p class="export-status" id="exportStatus">Ready when you are.</p>
+      </section>
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.all.js"></script>
     <script src="app.js"></script>
   </body>

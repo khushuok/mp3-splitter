@@ -1,68 +1,64 @@
-const input = document.querySelector('#fileInput');
-const dropZone = document.querySelector('#dropZone');
-const emptyState = document.querySelector('#emptyState');
-const editor = document.querySelector('#editor');
-const audio = document.querySelector('#audio');
-const canvas = document.querySelector('#waveform');
-const ctx = canvas.getContext('2d');
-let buffer, objectUrl, start = 0, end = 0, dragging = null;
+const $ = selector => document.querySelector(selector);
+const fileInput = $('#fileInput');
+const homeScreen = $('#homeScreen');
+const studioScreen = $('#studioScreen');
+const tracksEl = $('#tracks');
+const rulerEl = $('#ruler');
+const timelineScroll = $('#timelineScroll');
+const playheadEl = $('#timelinePlayhead');
+const emptyTimeline = $('#emptyTimeline');
 
-const $ = s => document.querySelector(s);
-const format = seconds => { const m = Math.floor(seconds / 60); return `${m}:${(seconds % 60).toFixed(1).padStart(4, '0')}`; };
-const setStatus = text => $('#status').textContent = text;
+const state = { tracks: [], selectedId: null, playhead: 0, duration: 0, playing: false, loop: false, masterVolume: 1, context: null, nodes: [], startedAt: 0, playFrom: 0, animation: null, projectName: 'Untitled session' };
+const uid = () => Math.random().toString(36).slice(2, 10);
+const formatTime = seconds => { const safe = Math.max(0, seconds || 0), minutes = Math.floor(safe / 60); return `${minutes}:${(safe % 60).toFixed(1).padStart(4, '0')}`; };
+const displayName = name => name.replace(/\.[^/.]+$/, '');
+const selectedClip = () => state.tracks.flatMap(track => track.clips).find(clip => clip.id === state.selectedId);
+const selectedTrack = () => state.tracks.find(track => track.clips.some(clip => clip.id === state.selectedId));
+const clipLength = clip => Math.max(0, clip.out - clip.in);
 
-function updateUI() {
-  const duration = buffer.duration;
-  const left = (start / duration) * 100, right = (end / duration) * 100;
-  $('#selection').style.left = `${left}%`; $('#selection').style.width = `${right - left}%`;
-  $('#startHandle').style.left = `${left}%`; $('#endHandle').style.left = `${right}%`;
-  $('#startReadout').textContent = $('#startTime').textContent = format(start);
-  $('#endReadout').textContent = $('#durationTime').textContent = format(end);
-  $('#clipLength').textContent = format(end - start);
+function resetProject() { stopPlayback(); state.tracks = []; state.selectedId = null; state.playhead = 0; state.duration = 0; state.projectName = 'Untitled session'; $('#projectName').value = state.projectName; render(); }
+function updateDuration() { state.duration = Math.max(.1, ...state.tracks.flatMap(track => track.clips.map(clip => clip.start + clipLength(clip)))); if (state.playhead > state.duration) state.playhead = state.duration; }
+function render() { updateDuration(); renderTimeline(); renderInspector(); updateTransport(); }
+function renderTimeline() {
+  const hasTracks = state.tracks.length > 0; emptyTimeline.classList.toggle('hidden', hasTracks); timelineScroll.classList.toggle('hidden', !hasTracks); if (!hasTracks) return;
+  const marks = 6; rulerEl.innerHTML = Array.from({ length: marks + 1 }, (_, index) => `<span style="left:${index / marks * 100}%">${formatTime(state.duration * index / marks)}</span>`).join('');
+  tracksEl.innerHTML = state.tracks.map((track, index) => `<div class="track-row"><div class="track-label"><i>♫</i><div><b>${escapeHtml(track.name)}</b><small>LAYER ${String(index + 1).padStart(2, '0')}</small></div></div><div class="track-lane">${track.clips.map(clip => { const left = clip.start / state.duration * 100, width = Math.max(1, clipLength(clip) / state.duration * 100); return `<button class="audio-clip ${clip.id === state.selectedId ? 'selected' : ''}" data-clip="${clip.id}" style="left:${left}%;width:${width}%"><span class="clip-title">${escapeHtml(clip.name)}</span><canvas data-wave="${clip.id}"></canvas></button>`; }).join('')}</div></div>`).join('');
+  document.querySelectorAll('[data-wave]').forEach(canvas => drawWave(canvas, state.tracks.flatMap(track => track.clips).find(clip => clip.id === canvas.dataset.wave)));
+  document.querySelectorAll('.audio-clip').forEach(clip => clip.addEventListener('click', event => { event.stopPropagation(); state.selectedId = clip.dataset.clip; render(); }));
+  document.querySelectorAll('.track-lane').forEach(lane => lane.addEventListener('click', event => { const rect = lane.getBoundingClientRect(); seek(((event.clientX - rect.left) / rect.width) * state.duration); }));
+  movePlayhead();
 }
-function drawWave() {
-  const dpr = devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
-  canvas.width = w * dpr; canvas.height = h * dpr; ctx.scale(dpr, dpr); ctx.clearRect(0,0,w,h);
-  const data = buffer.getChannelData(0), step = Math.max(1, Math.floor(data.length / w));
-  ctx.fillStyle = '#55736e';
-  for (let x=0; x<w; x++) { let min=1,max=-1; for(let j=0;j<step;j++){ const v=data[(x*step)+j] || 0; if(v<min)min=v;if(v>max)max=v; } const y=(1+min)*h/2, height=Math.max(1,(max-min)*h/2); ctx.fillRect(x,y,1,height); }
-}
-async function loadFile(file) {
-  if (!file || (!file.type.startsWith('audio/') && !/\.mp3$/i.test(file.name))) { setStatus('Please choose an audio file.'); return; }
-  if (file.size > 100 * 1024 * 1024) { setStatus('Please choose a file smaller than 100 MB.'); return; }
-  setStatus('Reading your audio…');
-  try {
-    const data = await file.arrayBuffer(); const audioCtx = new AudioContext();
-    buffer = await audioCtx.decodeAudioData(data); await audioCtx.close();
-    if (objectUrl) URL.revokeObjectURL(objectUrl); objectUrl = URL.createObjectURL(file); audio.src = objectUrl;
-    start = 0; end = buffer.duration; $('#fileName').textContent = file.name; $('#outputName').value = file.name.replace(/\.[^/.]+$/, '') + '-cut'; $('#fileMeta').textContent = `${(file.size / 1048576).toFixed(1)} MB · ${format(end)}`;
-    emptyState.classList.add('hidden'); editor.classList.remove('hidden'); requestAnimationFrame(() => { drawWave(); updateUI(); });
-    setStatus('Drag the white handles to choose the part you want to keep.');
-  } catch { setStatus('That file could not be read. Try another MP3.'); }
-}
-input.addEventListener('change', e => loadFile(e.target.files[0]));
-$('#replaceBtn').addEventListener('click', () => input.click());
-['dragenter','dragover'].forEach(e => dropZone.addEventListener(e, ev => {ev.preventDefault(); dropZone.classList.add('dragging');}));
-['dragleave','drop'].forEach(e => dropZone.addEventListener(e, ev => {ev.preventDefault(); dropZone.classList.remove('dragging');}));
-dropZone.addEventListener('drop', e => loadFile(e.dataTransfer.files[0]));
-function moveHandle(event) { if (!dragging || !buffer) return; const r=$('#waveTrack').getBoundingClientRect(); const t=Math.max(0,Math.min(buffer.duration,((event.clientX-r.left)/r.width)*buffer.duration)); if(dragging==='start') start=Math.min(t,end-.05); else end=Math.max(t,start+.05); updateUI(); }
-['start','end'].forEach(which => { const el=$(`#${which}Handle`); el.addEventListener('pointerdown', e => { dragging=which; el.setPointerCapture(e.pointerId); }); });
-window.addEventListener('pointermove',moveHandle); window.addEventListener('pointerup',()=>dragging=null);
-$('#rewindBtn').addEventListener('click',()=> { audio.pause(); audio.currentTime=start; $('#playBtn').textContent='▶'; $('#playhead').style.display='none'; });
-$('#playBtn').addEventListener('click',()=> { if(audio.paused){ audio.currentTime=Math.max(start, Math.min(audio.currentTime,end)); audio.play(); $('#playBtn').textContent='❚❚'; $('#playhead').style.display='block'; } else audio.pause(); });
-audio.addEventListener('pause',()=> $('#playBtn').textContent='▶');
-audio.addEventListener('timeupdate',()=> { const p=(audio.currentTime/buffer.duration)*100; $('#playhead').style.left=`${p}%`; if(audio.currentTime>=end){ audio.pause(); audio.currentTime=start; $('#playhead').style.display='none'; } });
-['fadeIn', 'fadeOut', 'volume'].forEach(id => {
-  $(`#${id}`).addEventListener('input', e => {
-    const value = Number(e.target.value);
-    $(`#${id}Value`).textContent = id === 'volume' ? `${value}%` : `${value.toFixed(1)}s`;
-    if (id === 'volume') audio.volume = Math.min(value / 100, 1);
-  });
-});
-function floatTo16BitPCM(input) { const out=new Int16Array(input.length); for(let i=0;i<input.length;i++){const s=Math.max(-1,Math.min(1,input[i]));out[i]=s<0?s*32768:s*32767;} return out; }
-$('#exportBtn').addEventListener('click', () => {
-  if (!window.lamejs) { setStatus('MP3 encoder is still loading — please try again in a moment.'); return; }
-  setStatus('Encoding your MP3…'); $('#exportBtn').disabled=true;
-  setTimeout(() => { try { const rate=buffer.sampleRate, from=Math.floor(start*rate), to=Math.floor(end*rate), length=to-from; const sourceL=buffer.getChannelData(0), sourceR=buffer.numberOfChannels>1?buffer.getChannelData(1):sourceL; const fadeIn=Math.min(Number($('#fadeIn').value), length/rate), fadeOut=Math.min(Number($('#fadeOut').value), length/rate), volume=Number($('#volume').value)/100; const l=new Float32Array(length), r=new Float32Array(length); for(let i=0;i<length;i++){ let gain=volume; const t=i/rate, remaining=(length-i)/rate; if(fadeIn>0 && t<fadeIn) gain*=t/fadeIn; if(fadeOut>0 && remaining<fadeOut) gain*=remaining/fadeOut; l[i]=sourceL[from+i]*gain; r[i]=sourceR[from+i]*gain; } const encoder=new lamejs.Mp3Encoder(2,rate,Number($('#quality').value)); const left=floatTo16BitPCM(l), right=floatTo16BitPCM(r), chunks=[]; for(let i=0;i<left.length;i+=1152){ const mp3=encoder.encodeBuffer(left.subarray(i,i+1152),right.subarray(i,i+1152)); if(mp3.length)chunks.push(new Int8Array(mp3)); } const last=encoder.flush(); if(last.length)chunks.push(new Int8Array(last)); const blob=new Blob(chunks,{type:'audio/mpeg'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); const safeName=$('#outputName').value.trim().replace(/[\\/:*?"<>|]/g,'-') || 'audio-cut'; a.download=`${safeName}.mp3`; a.click(); URL.revokeObjectURL(a.href); setStatus('Your cut is ready — download started.'); } catch(err) { console.error(err); setStatus('Could not export this clip. Please try a shorter selection.'); } finally { $('#exportBtn').disabled=false; } }, 30);
-});
-window.addEventListener('resize',()=>buffer&&drawWave());
+function escapeHtml(value) { const element = document.createElement('div'); element.textContent = value; return element.innerHTML; }
+function drawWave(canvas, clip) { if (!clip) return; const rect = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1, width = Math.max(1, Math.floor(rect.width * dpr)), height = Math.max(1, Math.floor(rect.height * dpr)); canvas.width = width; canvas.height = height; const context = canvas.getContext('2d'); context.scale(dpr, dpr); const visualWidth = Math.max(1, rect.width), visualHeight = Math.max(1, rect.height), data = clip.buffer.getChannelData(0), sampleStart = Math.floor(clip.in * clip.buffer.sampleRate), sampleEnd = Math.floor(clip.out * clip.buffer.sampleRate), step = Math.max(1, Math.floor((sampleEnd - sampleStart) / visualWidth)); context.clearRect(0, 0, visualWidth, visualHeight); context.fillStyle = clip.id === state.selectedId ? '#d8ff58' : '#a0c287'; for (let x = 0; x < visualWidth; x++) { let min = 1, max = -1; for (let i = 0; i < step; i++) { const value = data[sampleStart + x * step + i] || 0; min = Math.min(min, value); max = Math.max(max, value); } const y = (1 + min) * visualHeight / 2; context.fillRect(x, y, 1, Math.max(1, (max - min) * visualHeight / 2)); } }
+function renderInspector() { const clip = selectedClip(); $('#noSelection').classList.toggle('hidden', !!clip); $('#clipProperties').classList.toggle('hidden', !clip); if (!clip) return; $('#clipName').textContent = clip.name; $('#clipMeta').textContent = `${formatTime(clipLength(clip))} · audio clip`; $('#clipPosition').textContent = formatTime(clip.start); $('#clipLength').textContent = formatTime(clipLength(clip)); $('#clipVolume').value = Math.round(clip.gain * 100); $('#clipVolumeValue').textContent = `${Math.round(clip.gain * 100)}%`; }
+function updateTransport() { $('#currentTime').textContent = formatTime(state.playhead); $('#totalTime').textContent = formatTime(state.duration || 0); $('#playToggle').textContent = state.playing ? '❚❚' : '▶'; $('#loopToggle').classList.toggle('enabled', state.loop); }
+function movePlayhead() { if (!timelineScroll.classList.contains('hidden')) playheadEl.style.left = `${118 + (state.playhead / state.duration) * Math.max(0, timelineScroll.clientWidth - 118)}px`; }
+function seek(position) { state.playhead = Math.max(0, Math.min(state.duration, position)); if (state.playing) startPlayback(); else { updateTransport(); movePlayhead(); } }
+
+async function importFiles(files, isNewProject = false) { const audioFiles = [...files].filter(file => file.type.startsWith('audio/') || /\.(mp3|wav|m4a|ogg)$/i.test(file.name)); if (!audioFiles.length) return; if (isNewProject) resetProject(); try { const decoder = new AudioContext(); for (const file of audioFiles) { const buffer = await decoder.decodeAudioData(await file.arrayBuffer()); const track = { id: uid(), name: displayName(file.name).slice(0, 16), clips: [{ id: uid(), name: displayName(file.name), buffer, start: 0, in: 0, out: buffer.duration, gain: 1 }] }; state.tracks.push(track); state.selectedId = track.clips[0].id; } await decoder.close(); if (isNewProject) { state.projectName = displayName(audioFiles[0].name); $('#projectName').value = state.projectName; } showStudio(); render(); } catch (error) { console.error(error); alert('Splitly could not read one of those audio files. Please try an MP3, WAV, M4A or OGG file.'); } }
+function showStudio() { homeScreen.classList.add('hidden'); studioScreen.classList.remove('hidden'); }
+function showHome() { stopPlayback(); studioScreen.classList.add('hidden'); homeScreen.classList.remove('hidden'); }
+function queueFilePicker(reset = false) { fileInput.dataset.reset = String(reset); fileInput.click(); }
+
+function ensureContext() { if (!state.context) state.context = new AudioContext(); return state.context; }
+async function startPlayback() { if (!state.tracks.length) return; stopPlayback(false); const context = ensureContext(); await context.resume(); const from = state.playhead >= state.duration ? 0 : state.playhead; state.playhead = from; state.playFrom = from; state.startedAt = context.currentTime; state.nodes = []; state.tracks.forEach(track => track.clips.forEach(clip => { const clipEnd = clip.start + clipLength(clip); if (clipEnd <= from) return; const startDelay = Math.max(0, clip.start - from); const offset = clip.in + Math.max(0, from - clip.start); const duration = clip.out - offset; if (duration <= 0) return; const source = context.createBufferSource(), gain = context.createGain(); source.buffer = clip.buffer; gain.gain.value = clip.gain * state.masterVolume; source.connect(gain).connect(context.destination); source.start(context.currentTime + startDelay, offset, duration); state.nodes.push(source); })); state.playing = true; tickPlayback(); updateTransport(); }
+function tickPlayback() { cancelAnimationFrame(state.animation); const context = state.context; const tick = () => { if (!state.playing) return; state.playhead = state.playFrom + (context.currentTime - state.startedAt); if (state.playhead >= state.duration) { if (state.loop) { state.playhead = 0; startPlayback(); return; } stopPlayback(); state.playhead = state.duration; updateTransport(); movePlayhead(); return; } updateTransport(); movePlayhead(); state.animation = requestAnimationFrame(tick); }; tick(); }
+function stopPlayback(resetButton = true) { state.nodes.forEach(node => { try { node.stop(); } catch {} }); state.nodes = []; state.playing = false; cancelAnimationFrame(state.animation); if (resetButton) updateTransport(); }
+function togglePlayback() { state.playing ? stopPlayback() : startPlayback(); }
+
+function nudgeSelected(seconds) { const clip = selectedClip(); if (!clip) return; clip.start = Math.max(0, clip.start + seconds); render(); }
+function splitSelected() { const clip = selectedClip(), track = selectedTrack(); if (!clip || !track) return; const point = state.playhead - clip.start; if (point < .08 || point > clipLength(clip) - .08) return; const oldOut = clip.out; clip.out = clip.in + point; const next = { ...clip, id: uid(), name: `${clip.name} (part 2)`, start: state.playhead, in: clip.out, out: oldOut }; track.clips.push(next); state.selectedId = next.id; render(); }
+function duplicateSelected() { const clip = selectedClip(), track = selectedTrack(); if (!clip || !track) return; const copy = { ...clip, id: uid(), name: `${clip.name} copy`, start: clip.start + clipLength(clip) + .1 }; track.clips.push(copy); state.selectedId = copy.id; render(); }
+function deleteSelected() { const track = selectedTrack(); if (!track) return; track.clips = track.clips.filter(clip => clip.id !== state.selectedId); if (!track.clips.length) state.tracks = state.tracks.filter(item => item.id !== track.id); state.selectedId = null; render(); }
+function trimClip(which, direction) { const clip = selectedClip(); if (!clip) return; const amount = .1 * direction; if (which === 'start') clip.in = Math.max(0, Math.min(clip.out - .1, clip.in + amount)); else clip.out = Math.max(clip.in + .1, Math.min(clip.buffer.duration, clip.out + amount)); render(); }
+
+async function exportProject() { if (!state.tracks.length || !window.lamejs) return; const button = $('#confirmExport'); button.disabled = true; $('#exportStatus').textContent = 'Mixing your project locally…'; try { const rate = 44100, frames = Math.ceil(state.duration * rate), context = new OfflineAudioContext(2, frames, rate); state.tracks.forEach(track => track.clips.forEach(clip => { const source = context.createBufferSource(), gain = context.createGain(); source.buffer = clip.buffer; gain.gain.value = clip.gain * state.masterVolume; source.connect(gain).connect(context.destination); source.start(clip.start, clip.in, clipLength(clip)); })); const mixed = await context.startRendering(); $('#exportStatus').textContent = 'Encoding your MP3…'; const encoder = new lamejs.Mp3Encoder(2, rate, Number(document.querySelector('input[name="quality"]:checked').value)); const left = floatTo16(mixed.getChannelData(0)), right = floatTo16(mixed.getChannelData(1)), chunks = []; for (let i = 0; i < left.length; i += 1152) { const encoded = encoder.encodeBuffer(left.subarray(i, i + 1152), right.subarray(i, i + 1152)); if (encoded.length) chunks.push(new Int8Array(encoded)); } const final = encoder.flush(); if (final.length) chunks.push(new Int8Array(final)); const href = URL.createObjectURL(new Blob(chunks, { type: 'audio/mpeg' })), anchor = document.createElement('a'), safe = $('#outputName').value.trim().replace(/[\\/:*?"<>|]/g, '-') || 'splitly-export'; anchor.href = href; anchor.download = `${safe}.mp3`; anchor.click(); setTimeout(() => URL.revokeObjectURL(href), 1000); $('#exportStatus').textContent = 'Download started. Your mix is ready.'; } catch (error) { console.error(error); $('#exportStatus').textContent = 'Export failed. Try a shorter project or another file.'; } finally { button.disabled = false; } }
+function floatTo16(data) { const out = new Int16Array(data.length); for (let i = 0; i < data.length; i++) { const value = Math.max(-1, Math.min(1, data[i])); out[i] = value < 0 ? value * 32768 : value * 32767; } return out; }
+
+document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => queueFilePicker(true)));
+fileInput.addEventListener('change', event => { importFiles(event.target.files, fileInput.dataset.reset === 'true'); event.target.value = ''; });
+$('#homeLink').addEventListener('click', event => { event.preventDefault(); showHome(); }); $('#backHome').addEventListener('click', showHome); $('#addAudio').addEventListener('click', () => queueFilePicker()); $('#transportAdd').addEventListener('click', () => queueFilePicker()); $('#addLayer').addEventListener('click', () => queueFilePicker());
+$('#playToggle').addEventListener('click', togglePlayback); $('#rewind').addEventListener('click', () => seek(0)); $('#loopToggle').addEventListener('click', () => { state.loop = !state.loop; updateTransport(); }); $('#moveLeft').addEventListener('click', () => nudgeSelected(-1)); $('#moveRight').addEventListener('click', () => nudgeSelected(1)); $('#splitClip').addEventListener('click', splitSelected); $('#duplicateClip').addEventListener('click', duplicateSelected); $('#deleteClip').addEventListener('click', deleteSelected);
+$('#clipVolume').addEventListener('input', event => { const clip = selectedClip(); if (clip) { clip.gain = Number(event.target.value) / 100; renderInspector(); } }); $('#masterVolume').addEventListener('input', event => { state.masterVolume = Number(event.target.value) / 100; $('#masterVolumeValue').textContent = `${event.target.value}%`; }); $('#trimStartBack').addEventListener('click', () => trimClip('start', -1)); $('#trimStartForward').addEventListener('click', () => trimClip('start', 1)); $('#trimEndBack').addEventListener('click', () => trimClip('end', 1)); $('#trimEndForward').addEventListener('click', () => trimClip('end', -1));
+$('#projectName').addEventListener('input', event => { state.projectName = event.target.value; }); $('#openExport').addEventListener('click', () => { $('#outputName').value = `${state.projectName || 'splitly-export'}-mix`; $('#exportStatus').textContent = 'Ready when you are.'; $('#exportModal').classList.remove('hidden'); }); $('#closeExport').addEventListener('click', () => $('#exportModal').classList.add('hidden')); $('#exportModal').addEventListener('click', event => { if (event.target === $('#exportModal')) $('#exportModal').classList.add('hidden'); }); $('#confirmExport').addEventListener('click', exportProject);
+window.addEventListener('resize', () => { if (state.tracks.length) renderTimeline(); }); window.addEventListener('keydown', event => { if (event.code === 'Space' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName) && !studioScreen.classList.contains('hidden')) { event.preventDefault(); togglePlayback(); } if (event.key === 'Delete' && !studioScreen.classList.contains('hidden')) deleteSelected(); });
